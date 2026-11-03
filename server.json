@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "ai.aisma/aisma",
+  "title": "Aisma",
+  "description": "Edit videos you already shot with plain words and reference photos. Framing and audio stay.",
+  "repository": {
+    "url": "https://github.com/lex2029/aisma-mcp",
+    "source": "github"
+  },
+  "version": "1.0.1",
+  "websiteUrl": "https://aisma.ai/developers",
+  "icons": [
+    { "src": "https://aisma.ai/aisma-icon-512-v3.png", "mimeType": "image/png", "sizes": ["512x512"] },
+    { "src": "https://aisma.ai/favicon.svg", "mimeType": "image/svg+xml", "sizes": ["any"] }
+  ],
+  "remotes": [
+    { "type": "streamable-http", "url": "https://api.aisma.ai/mcp" }
+  ]
+}
