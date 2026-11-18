@@ -8,6 +8,7 @@ restyle the clip or add an effect. Aisma keeps the original framing and audio an
 or 1080p result to your Aisma Library.
 
 - **MCP server (remote, Streamable HTTP):** `https://api.aisma.ai/mcp`
+- **ChatGPT app:** [Aisma in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6af464388c4881919dab901a9adfd4d9)
 - **REST API:** `https://api.aisma.ai/v1` ([OpenAPI 3.1](https://api.aisma.ai/v1/openapi.json))
 - **Developer docs:** https://aisma.ai/developers
 - **Official MCP Registry name:** `ai.aisma/aisma`
@@ -18,16 +19,49 @@ itself is hosted by Aisma; there is nothing to install or run.
 ## What you need
 
 - An Aisma account signed in with Google, Apple or email. Guest profiles can't connect apps or hold keys.
-- Credits in that account. Edits use the same credits as the Aisma app, and the price of each edit is shown
-  before it starts. Credits are bought in Aisma, never through the API or MCP. Pricing: https://aisma.ai/pricing
+- Edits use the connected account's Aisma credits. Confirm each edit's credit cost before it starts.
+  Account and credit information is on the [pricing page](https://aisma.ai/pricing).
 - A clip of 2–60 seconds (MP4 or MOV, up to 500 MB), or a finished video from your Aisma Library.
   Optionally up to 10 reference photos (JPEG, PNG or WebP).
 
-## Connect an AI assistant (MCP)
+## Use Aisma in ChatGPT
+
+Open the [Aisma app in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6af464388c4881919dab901a9adfd4d9),
+connect it and sign in to your Aisma account. Attach a video and any reference photos in the chat, then
+describe the change. You can also choose a finished video from your Aisma Library.
+
+The ChatGPT app copies attached files with `import_chat_media`, then checks their asset ids with
+`get_asset`. For a new user who has never purchased credits or started an edit, the first edit must
+go through a preparation question round before it can start, even if the account has enough credits.
+The assistant calls `start_preview` and presents its useful questions in the chat. A question round
+already completed on aisma.ai also satisfies this first-use requirement.
+
+`get_preview` reads the preparation and `answer_preview` saves your choices. Once the offer is ready,
+confirm its credit cost before `start_prepared_edit` starts the edit with those answers. Preparation
+itself reserves no credits. For an account that has already edited, paid or completed a question round,
+`preview_unavailable` permits the ordinary `quote_edit` → confirmation → `start_edit` path. A temporary
+`unavailable` response means try later; a content refusal is shown without switching to that path.
+
+If a first start returns `preview_required` but preparation returns `preview_unavailable`, the assistant
+explains that preparation is unavailable and points you to [Aisma](https://aisma.ai/app/) to continue.
+It must not keep switching between preview and ordinary start attempts.
+
+Follow the task's `webUrl` in Aisma, or ask ChatGPT to check `get_job` and provide `get_result_link` once
+the result is ready. Available timing is approximate; a finished result is confirmed by `resultReady`.
+
+If the account needs more credits, use the [pricing page](https://aisma.ai/pricing) for account information,
+then return to the same chat and account. The assistant checks the balance again and keeps your selected
+materials, preview and answers. An expired ordinary quote needs a fresh quote and confirmation. If a
+prepared edit reports a changed credit cost, confirm that amount to continue with the same preview.
+
+The published app uses `https://api.aisma.ai/mcp/catalog`. Custom connections to `/mcp` use the standard
+MCP workflow below.
+
+## Connect another AI assistant (MCP)
 
 Your client opens Aisma's sign-in page on first use: OAuth 2.1 with PKCE and dynamic client registration,
-so there is no client ID to copy. On the consent screen you choose what the connection may do and its
-monthly credit limit. You can change limits or disconnect at any time in Aisma under
+so there is no client ID to copy. On the consent screen you choose what the connection may do and can
+set an optional monthly credit limit. You can change limits or disconnect at any time in Aisma under
 **Profile → Settings & help → Connected apps and keys** (https://aisma.ai/app/api-access).
 
 Prefer a key? Create a personal API key on the same page and send it as `Authorization: Bearer aisma_live_…`.
@@ -63,25 +97,21 @@ With a key, add `"headers": { "Authorization": "Bearer aisma_live_…" }` next t
 }
 ```
 
-**ChatGPT** (custom MCP servers, where your plan and workspace allow them): open
-[chatgpt.com/plugins](https://chatgpt.com/plugins), choose **+** → **Add custom MCP server**, enter
-`https://api.aisma.ai/mcp`, pick OAuth and sign in to Aisma.
-
 **Claude.ai and Claude Desktop:** Settings → Connectors → **Add custom connector** → `https://api.aisma.ai/mcp`.
 
 **Other clients:** any client that supports remote MCP servers over Streamable HTTP works. The server is
 stateless and answers protocol revisions 2025-11-25, 2025-06-18 and 2025-03-26. An unauthenticated request
 gets `401` with `WWW-Authenticate: Bearer resource_metadata=…`, which is how clients discover the sign-in.
 
-### Chat-only assistants: an honest limitation
+### Uploading through standard MCP
 
-Video files never travel inside MCP messages. `create_upload` returns a one-time HTTPS link and the
-assistant uploads the file itself with an HTTP `PUT`. That works in assistants that can read your files and
-run commands (Claude Code, Cursor, VS Code and other coding agents). A chat-only assistant (ChatGPT,
-Claude.ai) can't upload a new clip this way; there it can re-edit videos that are already finished in your
-Aisma Library (`list_library` → `use_library_video`).
+Standard MCP's `create_upload` returns a one-time HTTPS link and the client uploads the file itself with
+an HTTP `PUT`. This works in assistants that can read your files and run commands, including Claude Code,
+Cursor, VS Code and other coding agents. Clients without that capability can use finished videos from
+your Aisma Library (`list_library` → `use_library_video`). Chat attachments use the ChatGPT app's
+`import_chat_media` flow described above.
 
-## Tools
+## Standard MCP tools
 
 | Tool | What it does | Spends credits |
 |---|---|---|
@@ -97,8 +127,24 @@ Aisma Library (`list_library` → `use_library_video`).
 
 Every tool has a title, read-only or destructive hints and an output schema.
 
+### ChatGPT catalog tools
+
+The ChatGPT app shares the standard tools except `create_upload` and adds these tools for attachments
+and preparation. The standard `/mcp` endpoint and REST API use the upload → quote → confirmed start flow.
+They do not provide interactive preparation questions or catalog previews; Aisma uses its evidence-based
+choices for those ordinary edits.
+
+| Tool | What it does | Spends credits |
+|---|---|---|
+| `import_chat_media` | Copies the video and photos attached in this chat into your private Aisma account | No |
+| `start_preview` | Prepares an eligible edit and its questions; reuse the same input on retries and supply a new `requestId` for an intentionally new preparation with identical input | No |
+| `get_preview` | Reads the preparation, questions and offered credit cost | No |
+| `answer_preview` | Saves your choices for the current question round | No |
+| `start_prepared_edit` | Starts the prepared edit with its saved answers after you confirm the credit amount | Yes, after you confirm |
+
 ### Try it
 
+- In ChatGPT, attach a clip and say, "Change the background to a snowy pine forest. Ask me the preparation questions and wait for my confirmation before starting."
 - "Upload ~/Videos/wedding.mov to Aisma and remove the man in the red jacket behind the couple. Ask me before you start."
 - "In product.mp4, swap the clear perfume bottle for the matte-black one in bottle.jpg."
 - "Change her gray tracksuit in dance.mp4 to the red suit in photo.png."
